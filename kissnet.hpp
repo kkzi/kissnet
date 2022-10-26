@@ -399,9 +399,10 @@ namespace kissnet
 	};
 
 	///Address information structs
-	struct addr_collection {
-	    sockaddr_storage adrinf = {0};
-	    socklen_t sock_size = 0;
+	struct addr_collection
+	{
+		sockaddr_storage adrinf = { 0 };
+		socklen_t sock_size		= 0;
 	};
 
 	///File descriptor set types
@@ -439,8 +440,8 @@ namespace kissnet
 		}
 
 		///Construct the endpoint from "address:port"
-        endpoint(std::string addr)
-        {
+		endpoint(std::string addr)
+		{
 			const auto separator = addr.find_last_of(':');
 
 			//Check if input wasn't missformed
@@ -492,6 +493,27 @@ namespace kissnet
 
 			if (address.empty())
 				kissnet_fatal_error("Couldn't construct endpoint from sockaddr(_storage) struct");
+		}
+
+		operator sockaddr_in() const
+		{
+			sockaddr_in addr;
+			if (address.find('.') != address.npos)
+			{
+				addr.sin_family = AF_INET;
+			}
+			else if (address.find(':') != address.npos)
+			{
+				addr.sin_family = AF_INET6;
+			}
+			else
+			{
+				assert(true);
+				kissnet_fatal_error("Invalid address, not ipv4 or ipv6");
+			}
+			addr.sin_port = ntohs(port);
+			inet_pton(addr.sin_family, address.c_str(), &addr.sin_addr.s_addr);
+			return addr;
 		}
 	};
 
@@ -778,8 +800,6 @@ namespace kissnet
 					return socket_status::errored;
 				}
 			}
-
-			kissnet_fatal_error("connect called for non-tcp socket");
 		}
 
 		///sockaddr struct
@@ -787,7 +807,6 @@ namespace kissnet
 		socklen_t socket_input_socklen = 0;
 
 	public:
-
 		///Construct an invalid socket
 		socket() = default;
 
@@ -963,27 +982,27 @@ namespace kissnet
 			}
 		}
 
-        ///Join a multicast group
-        void join(const endpoint& multi_cast_endpoint, const std::string& interface = "")
-        {
-			if (sock_proto != protocol::udp)
+		///Join a multicast group
+		void join(const endpoint& multi_cast_endpoint, const std::string& interface = "")
+		{
+			if constexpr (sock_proto != protocol::udp)
 			{
 				kissnet_fatal_error("joining a multicast is only possible in UDP mode\n");
 			}
 
-			addrinfo *multicast_addr;
-			addrinfo *local_addr;
-			addrinfo  hints = {0};
+			addrinfo* multicast_addr;
+			addrinfo* local_addr;
+			addrinfo hints	= { 0 };
 			hints.ai_family = PF_UNSPEC;
-			hints.ai_flags  = AI_NUMERICHOST;
+			hints.ai_flags	= AI_NUMERICHOST;
 			if (getaddrinfo(multi_cast_endpoint.address.c_str(), nullptr, &hints, &multicast_addr) != 0)
 			{
 				kissnet_fatal_error("getaddrinfo() failed\n");
 			}
 
-			hints.ai_family   = multicast_addr->ai_family;
+			hints.ai_family	  = multicast_addr->ai_family;
 			hints.ai_socktype = SOCK_DGRAM;
-			hints.ai_flags    = AI_PASSIVE;
+			hints.ai_flags	  = AI_PASSIVE;
 			if (getaddrinfo(nullptr, std::to_string(multi_cast_endpoint.port).c_str(), &hints, &local_addr) != 0)
 			{
 				kissnet_fatal_error("getaddrinfo() failed\n");
@@ -993,53 +1012,62 @@ namespace kissnet
 			if (sock != INVALID_SOCKET)
 			{
 				socket_addrinfo = local_addr;
-			} else {
+			}
+			else
+			{
 				kissnet_fatal_error("syscall_socket() failed\n");
 			}
 
 			bind();
 
 			//IPv4
-			if (multicast_addr->ai_family  == PF_INET && multicast_addr->ai_addrlen == sizeof(struct sockaddr_in))
+			if (multicast_addr->ai_family == PF_INET && multicast_addr->ai_addrlen == sizeof(struct sockaddr_in))
 			{
-				struct ip_mreq multicastRequest = {0};
+				struct ip_mreq multicastRequest = { 0 };
 				memcpy(&multicastRequest.imr_multiaddr,
 					   &((struct sockaddr_in*)(multicast_addr->ai_addr))->sin_addr,
 					   sizeof(multicastRequest.imr_multiaddr));
 
-				if (interface.length()) {
-					multicastRequest.imr_interface.s_addr = inet_addr(interface.c_str());;
-				} else {
+				if (interface.length())
+				{
+					multicastRequest.imr_interface.s_addr = inet_addr(interface.c_str());
+					;
+				}
+				else
+				{
 					multicastRequest.imr_interface.s_addr = htonl(INADDR_ANY);
 				}
 
-				if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*) &multicastRequest, sizeof(multicastRequest)) != 0)
+				if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&multicastRequest, sizeof(multicastRequest)) != 0)
 				{
 					kissnet_fatal_error("setsockopt() failed\n");
 				}
 			}
 
 			//IPv6
-			else if (multicast_addr->ai_family  == PF_INET6 && multicast_addr->ai_addrlen == sizeof(struct sockaddr_in6))
+			else if (multicast_addr->ai_family == PF_INET6 && multicast_addr->ai_addrlen == sizeof(struct sockaddr_in6))
 			{
-				struct ipv6_mreq multicastRequest = {0};
+				struct ipv6_mreq multicastRequest = { 0 };
 				memcpy(&multicastRequest.ipv6mr_multiaddr,
 					   &((struct sockaddr_in6*)(multicast_addr->ai_addr))->sin6_addr,
 					   sizeof(multicastRequest.ipv6mr_multiaddr));
 
-				if (interface.length()) {
-					struct addrinfo *reslocal;
-					if (getaddrinfo(interface.c_str(), nullptr, nullptr, &reslocal)){
+				if (interface.length())
+				{
+					struct addrinfo* reslocal;
+					if (getaddrinfo(interface.c_str(), nullptr, nullptr, &reslocal))
+					{
 						kissnet_fatal_error("getaddrinfo() failed\n");
 					}
-					multicastRequest.ipv6mr_interface = ((sockaddr_in6 *)reslocal->ai_addr)->sin6_scope_id;
+					multicastRequest.ipv6mr_interface = ((sockaddr_in6*)reslocal->ai_addr)->sin6_scope_id;
 					freeaddrinfo(reslocal);
-				} else {
+				}
+				else
+				{
 					multicastRequest.ipv6mr_interface = 0;
 				}
 
-
-				if (setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, (char*) &multicastRequest, sizeof(multicastRequest)) != 0)
+				if (setsockopt(sock, IPPROTO_IPV6, IPV6_JOIN_GROUP, (char*)&multicastRequest, sizeof(multicastRequest)) != 0)
 				{
 					kissnet_fatal_error("setsockopt() failed\n");
 				}
@@ -1050,7 +1078,7 @@ namespace kissnet
 			}
 
 			freeaddrinfo(multicast_addr);
-        }
+		}
 
 		///(For TCP) connect to the endpoint as client
 		socket_status connect(int64_t timeout = 0)
@@ -1247,6 +1275,16 @@ namespace kissnet
 			return send(buff.data(), length, addr);
 		}
 
+		template <size_t buff_size>
+		bytes_with_status send(const buffer<buff_size>& buff, endpoint ep)
+		{
+			sockaddr_in sin(ep);
+			addr_collection coll;
+			coll.sock_size = sizeof(sin);
+			memcpy(&coll.adrinf, &sin, sizeof(sin));
+			return send(buff.data(), buff_size, &coll);
+		}
+
 		///Send some bytes through the pipe
 		bytes_with_status send(const std::byte* read_buff, size_t length, addr_collection* addr = nullptr)
 		{
@@ -1263,11 +1301,14 @@ namespace kissnet
 #endif
 			else if constexpr (sock_proto == protocol::udp)
 			{
-			    if (addr) {
-			        received_bytes = sendto(sock, reinterpret_cast<const char*>(read_buff), static_cast<buffsize_t>(length), 0, reinterpret_cast<sockaddr*>(&addr->adrinf) , addr->sock_size);
-                } else {
-                    received_bytes = sendto(sock, reinterpret_cast<const char*>(read_buff), static_cast<buffsize_t>(length), 0, static_cast<SOCKADDR*>(socket_addrinfo->ai_addr), socklen_t(socket_addrinfo->ai_addrlen));
-                }
+				if (addr)
+				{
+					received_bytes = sendto(sock, reinterpret_cast<const char*>(read_buff), static_cast<buffsize_t>(length), 0, reinterpret_cast<sockaddr*>(&addr->adrinf), addr->sock_size);
+				}
+				else
+				{
+					received_bytes = sendto(sock, reinterpret_cast<const char*>(read_buff), static_cast<buffsize_t>(length), 0, static_cast<SOCKADDR*>(socket_addrinfo->ai_addr), socklen_t(socket_addrinfo->ai_addrlen));
+				}
 			}
 
 			if (received_bytes < 0)
@@ -1303,10 +1344,11 @@ namespace kissnet
 				socket_input_socklen = sizeof socket_input;
 
 				received_bytes = ::recvfrom(sock, reinterpret_cast<char*>(write_buff.data()) + start_offset, static_cast<buffsize_t>(buff_size - start_offset), 0, reinterpret_cast<sockaddr*>(&socket_input), &socket_input_socklen);
-				if (addr_info) {
-				    addr_info->adrinf = socket_input;
-				    addr_info->sock_size = socket_input_socklen;
-                }
+				if (addr_info)
+				{
+					addr_info->adrinf	 = socket_input;
+					addr_info->sock_size = socket_input_socklen;
+				}
 			}
 
 			if (received_bytes < 0)
@@ -1363,9 +1405,10 @@ namespace kissnet
 				socket_input_socklen = sizeof socket_input;
 
 				received_bytes = ::recvfrom(sock, reinterpret_cast<char*>(buffer), static_cast<buffsize_t>(len), 0, reinterpret_cast<sockaddr*>(&socket_input), &socket_input_socklen);
-				if (addr_info) {
-				    addr_info->adrinf = socket_input;
-				    addr_info->sock_size = socket_input_socklen;
+				if (addr_info)
+				{
+					addr_info->adrinf	 = socket_input;
+					addr_info->sock_size = socket_input_socklen;
 				}
 			}
 
@@ -1394,18 +1437,18 @@ namespace kissnet
 		}
 
 		///Return an endpoint that originated the data in the last recv
-        endpoint get_recv_endpoint() const
-        {
-            if constexpr (sock_proto == protocol::tcp)
-            {
-                return get_bind_loc();
-            }
-            if constexpr (sock_proto == protocol::udp)
-            {
-                const SOCKADDR* addr = reinterpret_cast<const SOCKADDR*>(&socket_input);
-                return endpoint(const_cast<SOCKADDR*>(addr));
-            }
-        }
+		endpoint get_recv_endpoint() const
+		{
+			if constexpr (sock_proto == protocol::tcp)
+			{
+				return get_bind_loc();
+			}
+			if constexpr (sock_proto == protocol::udp)
+			{
+				const SOCKADDR* addr = reinterpret_cast<const SOCKADDR*>(&socket_input);
+				return endpoint(const_cast<SOCKADDR*>(addr));
+			}
+		}
 
 		///Return the number of bytes available inside the socket
 		size_t bytes_available() const
